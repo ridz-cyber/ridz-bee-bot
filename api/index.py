@@ -1,13 +1,11 @@
-from flask import Flask, request
+from flask import Flask
+
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return 'Ridz Bot Live!'
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def catch_all(path):
+    return '🐝 Ridz Bee Bot is AWAKE! Live Ready!'
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    return 'ok'
-
-if __name__ == '__main__':
-    app.run()
+# Vercel needs this
+app = app
