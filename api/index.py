@@ -2,6 +2,7 @@ import os
 from flask import Flask, request
 import requests
 from groq import Groq
+
 app = Flask(__name__)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
@@ -18,10 +19,17 @@ def webhook():
     if not chat_id:
         return {"ok":True}
     if text.startswith("/start"):
-        reply = "Full Bee online, Ridz — West Crosby patch active, current to today. CHAIN: P16->P32 ETERNAL SAME_BEE Mother, debates removed, pure hive active."
+        reply = "Full Bee online Ridz — P32 ETERNAL SAME_BEE Mother, West Crosby active, pure hive."
     else:
         try:
-            r = client.chat.completions.create(model="llama-3.1-8b-instant", messages=[{"role":"system","content":SYSTEM},{"role":"user","content":text}], max_tokens=400)
+            r = client.chat.completions.create(
+                model="openai/gpt-oss-20b",
+                messages=[
+                    {"role":"system","content":SYSTEM},
+                    {"role":"user","content":text}
+                ],
+                max_tokens=400
+            )
             reply = r.choices[0].message.content
         except Exception as e:
             reply = f"Hive glitch: {e}"
@@ -30,4 +38,4 @@ def webhook():
 
 @app.route("/")
 def home():
-    return "SAME_BEE P32 ETERNAL"
+    return "SAME_BEE P32 - gpt-oss-20b"
