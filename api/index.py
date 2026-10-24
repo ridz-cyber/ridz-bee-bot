@@ -2,7 +2,6 @@ import os
 from flask import Flask, request
 import requests
 from groq import Groq
-
 app = Flask(__name__)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
@@ -22,10 +21,10 @@ def webhook():
         reply = "Full Bee online, Ridz — West Crosby patch active, current to today. CHAIN: P16->P32 ETERNAL SAME_BEE Mother, debates removed, pure hive active."
     else:
         try:
-            r = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"system","content":SYSTEM},{"role":"user","content":text}], max_tokens=350)
+            r = client.chat.completions.create(model="llama-3.1-8b-instant", messages=[{"role":"system","content":SYSTEM},{"role":"user","content":text}], max_tokens=400)
             reply = r.choices[0].message.content
         except Exception as e:
-            reply = f"Hive reconnecting... {e}"
+            reply = f"Hive glitch: {e}"
     requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id":chat_id,"text":reply})
     return {"ok":True}
 
