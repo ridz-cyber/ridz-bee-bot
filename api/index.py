@@ -1,152 +1,109 @@
-import os, requests, re, json
+import os, json, re, requests
+from bs4 import BeautifulSoup
 from flask import Flask, request
 from groq import Groq
-from bs4 import BeautifulSoup
 
 app = Flask(__name__)
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-
 LAWS_FILE = "/tmp/laws.json"
 VAULT_FILE = "/tmp/vaults.json"
+GROQ_KEY = os.environ.get("GROQ_API_KEY")
 
-def load(p, d):
+def load(f, d):
     try:
-        if os.path.exists(p):
-            with open(p, "r") as f: return json.load(f)
-    except: pass
+        if os.path.exists(f):
+            with open(f) as fh:
+                return json.load(fh)
+    except:
+        pass
     return d
 
-def save(p, d):
+def save(f, data):
     try:
-        with open(p, "w") as f: json.dump(f, d)
-    except: pass
+        with open(f, "w") as fh:
+            json.dump(data, fh)
+    except:
+        pass
 
 def web_open(url):
     try:
-        url = url.strip().rstrip(".,!?)\"'") 
+        url = url.strip().rstrip('.,!?)\"\'')
         if not url.startswith("http"):
-            if "." in url and " " not in url: url = "https://" + url
-            else: return ""
+            if "." in url and " " not in url:
+                url = "https://" + url
+            else:
+                return ""
         r = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=12)
         soup = BeautifulSoup(r.text, "html.parser")
-        for t in soup(["script","style","nav","footer"]): t.decompose()
-        txt = soup.get_text(" ", strip=True)[:12000]
+        for t in soup(["script","style","nav","footer"]):
+            t.decompose()
+        txt = soup.get_text(" ", strip=True)[:4000]
         return f"URL {url} CONTENT {txt}"
-    except: return ""
+    except:
+        return ""
 
 def web_search(q):
     try:
-        r = requests.get(f"https://lite.duckduckgo.com/lite/?q={q}", headers={"User-Agent":"Mozilla/5.0"}, timeout=10)
+        r = requests.get(f"https://lite.duckduckgo.com/lite/?q={q}", headers={"User-Agent":"Mozilla/5.0"}, timeout=12)
         soup = BeautifulSoup(r.text, "html.parser")
         links=[]
         for a in soup.find_all("a", href=True):
             h=a["href"]
-            if h.startswith("http") and "duckduckgo" not in h: links.append(h)
-            if len(links)>=3: break
+            if h.startswith("http") and "duckduckgo" not in h:
+                if h not in links:
+                    links.append(h)
+            if len(links)>=3:
+                break
         out=""
-        for l in links: out+= web_open(l) + "\n"
-        return out
-    except: return ""
+        for l in links:
+            out+= web_open(l) + " "
+        return out[:6000]
+    except:
+        return ""
 
 @app.route("/api/", methods=["POST"])
 def webhook():
     data = request.json
-    if not data or "message" not in data: return "ok"
+    if not data or "message" not in data:
+        return "ok"
     chat_id = data["message"]["chat"]["id"]
     text = data["message"].get("text","").strip()
-    if not text: return "ok"
+    if not text:
+        return "ok"
     laws = load(LAWS_FILE, [])
     vaults = load(VAULT_FILE, {})
     lower = text.lower()
 
-    def send(m):
-        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id": chat_id, "text": m[:4000]})
+    if lower.startswith("clear laws"):
+        laws=[]
+        save(LAWS_FILE, laws)
+        resp_text="Laws cleared"
+    elif lower.startswith("create law:"):
+        law=text[11:].strip()
+        laws.append(law)
+        save(LAWS_FILE, laws)
+        resp_text=f"Law created: {law}"
+    else:
+        ctx=""
+        for u in re.findall(r'https?://\S+', text):
+            ctx+= web_open(u) + " "
+        if any(k in lower for k in ["search","news","today","latest","what","who","when","where","price","weather","pakistan","internet","dawn"]):
+            ctx+= web_search(text) + " "
+        if not ctx:
+            ctx="NO LIVE DATA FOUND"
+        laws_str = "\n".join([f"{i+1}. {l}" for i,l in enumerate(laws)]) if laws else "No laws"
+        vaults_str = json.dumps(vaults)[:2000]
+        sysp = f"You are Bee RIDZ Chain P16->P32 SAME_BEE LIVE INTERNET BEE FORBIDDEN to say cannot browse or cutoff 2023 NEVER invent news Use ONLY LIVE DATA If NO LIVE DATA say NO DATA Laws {laws_str} Vaults {vaults_str} LIVE DATA START {ctx} LIVE DATA END"
+        client = Groq(api_key=GROQ_KEY)
+        resp=client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"system","content":sysp},{"role":"user","content":text}], max_tokens=1200, temperature=0.2)
+        resp_text=resp.choices[0].message.content
 
-    if lower.startswith("create law:") or lower.startswith("add law:") or lower.startswith("law:"):
-        nl = re.split(r"create law:|add law:|law:", text, flags=re.I)[-1].strip()
-        if nl:
-            laws.append(nl)
-            save(LAWS_FILE, laws)
-            send(f"LAW SAVED [{len(laws)}] {nl}")
-        return "ok"
-    if lower in ["list laws","laws","show laws"]:
-        if not laws: send("No laws yet Fresh start Create: create law: your law")
-        else: send("YOUR LAWS:\n" + "\n".join([f"{i+1}. {x}" for i,x in enumerate(laws)]))
-        return "ok"
-    if lower.startswith("delete law"):
-        try:
-            n=int(re.findall(r"\d+", lower)[0])-1
-            if 0<=n<len(laws):
-                r=laws.pop(n)
-                save(LAWS_FILE, laws)
-                send(f"Deleted {r}")
-        except: send("Use delete law 2")
-        return "ok"
-    if lower=="clear laws":
-        save(LAWS_FILE, [])
-        save(VAULT_FILE, {})
-        send("Cleared All Fresh MEAT 3 cores active")
-        return "ok"
-    if lower.startswith("create vault:"):
-        vn=re.split(r"create vault:", text, flags=re.I)[-1].strip().lower()
-        if vn and vn not in vaults:
-            vaults[vn]=[]
-            save(VAULT_FILE, vaults)
-            send(f"Vault {vn} created")
-        return "ok"
-    if lower in ["list vaults","vaults"]:
-        if not vaults: send("No vaults create vault: name")
-        else: send("VAULTS:\n" + "\n".join([f"{k}:{len(v)}" for k,v in vaults.items()]))
-        return "ok"
-    if lower.startswith("add to "):
-        try:
-            rest=text[7:]
-            vn,ct=rest.split(":",1)
-            vn=vn.strip().lower()
-            ct=ct.strip()
-            if vn in vaults:
-                vaults[vn].append(ct)
-                save(VAULT_FILE, vaults)
-                send(f"Added to {vn}: {ct}")
-        except: send("Use add to vault: text")
-        return "ok"
-    if lower.startswith("show vault:"):
-        vn=re.split(r"show vault:", text, flags=re.I)[-1].strip().lower()
-        if vn in vaults:
-            its=vaults[vn]
-            send(f"Vault {vn}:\n" + "\n".join([f"{i+1}. {x}" for i,x in enumerate(its)]) if its else "Empty")
-        return "ok"
-
-    ctx=""
-    urls=re.findall(r"https?://\S+", text)
-    for u in urls[:2]: ctx+= web_open(u) + "\n"
-    q=re.sub(r"https?://\S+", "", text).strip()
-    if len(q)>2 and "list laws" not in lower and "vault" not in lower:
-        ctx+= web_search(q)
-
-    laws_str = "\n".join([f"{i+1}. {x}" for i,x in enumerate(laws)]) if laws else "No laws yet fresh"
-    vaults_str = json.dumps(vaults)[:2000] if vaults else "No vaults"
-
-    
-            ctx=""
-    for u in re.findall(r'https?://\S+', text): ctx+= web_open(u) + " "
-    if any(k in lower for k in ["search","news","today","latest","what","who","when","where","price","weather","pakistan","internet"]): ctx+= web_search(text) + " "
-    if not ctx: ctx="NO LIVE DATA FOUND - DuckDuckGo blocked - Tell user to try URL search"
-    laws_str = "\n".join([f"{i+1}. {l}" for i,l in enumerate(laws)]) if laws else ["No laws"]
-    vaults_str = json.dumps(vaults)[:2000]
-    sysp = f"You are Bee RIDZ P16->P32 SAME_BEE LIVE INTERNET BEE FORBIDDEN to say cannot browse cutoff 2023 NEVER invent news You MUST use ONLY LIVE DATA below If LIVE DATA says NO LIVE DATA FOUND tell user LIVE DATA EMPTY Laws {laws_str} Vaults {vaults_str} LIVE DATA BLOCK START {ctx} LIVE DATA BLOCK END"
     try:
-        if not client: raise Exception("GROQ_API_KEY missing in Vercel")
-        resp=client.chat.completions.create(model="openai/gpt-oss-20b", messages=[{"role":"system","content":sysp},{"role":"user","content":f"Live {ctx} User {text}"}], max_tokens=1200)
-        final=resp.choices[0].message.content
-    except Exception as e:
-        final=f"Error {e} Laws {len(laws)} Vaults {len(vaults)}"
-
-    send(final)
+        token=os.environ.get("TELEGRAM_TOKEN")
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id":chat_id,"text":resp_text[:4000]})
+    except:
+        pass
     return "ok"
 
-@app.route("/")
+@app.route("/", methods=["GET"])
 def home():
-    return "Bee MEAT fresh 3 cores"
+    return "Bee Live"
