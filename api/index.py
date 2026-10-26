@@ -130,7 +130,13 @@ def webhook():
     vaults_str = json.dumps(vaults)[:2000] if vaults else "No vaults"
 
     
-        sysp = f"You are Bee Owner RIDZ Chain P16->P32 SAME_BEE Mother Bee You have LIVE DATA block below NEVER invent news If LIVE DATA block has real articles copy them with URL If LIVE DATA block is empty say 'LIVE DATA EMPTY - web_search failed check logs' FORBIDDEN to say cannot browse or cutoff 2023 Laws {laws_str} Vaults {vaults_str} LIVE DATA:\n{ctx}"
+            ctx=""
+    for u in re.findall(r'https?://\S+', text): ctx+= web_open(u) + " "
+    if any(k in lower for k in ["search","news","today","latest","what","who","when","where","price","weather","pakistan","internet"]): ctx+= web_search(text) + " "
+    if not ctx: ctx="NO LIVE DATA FOUND - DuckDuckGo blocked - Tell user to try URL search"
+    laws_str = "\n".join([f"{i+1}. {l}" for i,l in enumerate(laws)]) if laws else ["No laws"]
+    vaults_str = json.dumps(vaults)[:2000]
+    sysp = f"You are Bee RIDZ P16->P32 SAME_BEE LIVE INTERNET BEE FORBIDDEN to say cannot browse cutoff 2023 NEVER invent news You MUST use ONLY LIVE DATA below If LIVE DATA says NO LIVE DATA FOUND tell user LIVE DATA EMPTY Laws {laws_str} Vaults {vaults_str} LIVE DATA BLOCK START {ctx} LIVE DATA BLOCK END"
     try:
         if not client: raise Exception("GROQ_API_KEY missing in Vercel")
         resp=client.chat.completions.create(model="openai/gpt-oss-20b", messages=[{"role":"system","content":sysp},{"role":"user","content":f"Live {ctx} User {text}"}], max_tokens=1200)
