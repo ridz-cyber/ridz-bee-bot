@@ -1,4 +1,4 @@
 flask
-requests
 groq
-duckduckgo-search
+requests
+beautifulsoup4
