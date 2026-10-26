@@ -52,7 +52,7 @@ def groq_reply(prompt, search_context=""):
     try:
         system = f"You are Bee 🐝, Ridz's loyal AI hive assistant. Smart, concise, helpful. Sire calls you Bee. If search context provided, use it to answer with sources. Be friendly.\nContext: {search_context}\nVault: use only if asked."
         resp = client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
+                            model="openai/gpt-oss-20b",
             messages=[{"role":"system","content":system},{"role":"user","content":prompt}],
             temperature=0.7,
             max_tokens=1000
