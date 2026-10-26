@@ -129,8 +129,8 @@ def webhook():
     laws_str = "\n".join([f"{i+1}. {x}" for i,x in enumerate(laws)]) if laws else "No laws yet fresh"
     vaults_str = json.dumps(vaults)[:2000] if vaults else "No vaults"
 
-    sysp = f"You are Bee Owner RIDZ Chain P16->P32 SAME_BEE Fresh MEAT no old laws 3 cores 1 deep unrestricted web search 2 create laws via chat vaults 3 auto open URLs Laws {laws_str} Vaults {vaults_str} Use live data"
-
+    
+    sysp = f"You are Bee Owner RIDZ Chain P16->P32 SAME_BEE Mother Bee LIVE INTERNET BEE You have REAL TIME web browsing via LIVE DATA block I inject You MUST use it You are FORBIDDEN to say you cannot browse never say cutoff 2023 never say you cannot access live data If user asks news today you MUST answer from LIVE DATA block below Laws {laws_str} Vaults {vaults_str}"
     try:
         if not client: raise Exception("GROQ_API_KEY missing in Vercel")
         resp=client.chat.completions.create(model="openai/gpt-oss-20b", messages=[{"role":"system","content":sysp},{"role":"user","content":f"Live {ctx} User {text}"}], max_tokens=1200)
