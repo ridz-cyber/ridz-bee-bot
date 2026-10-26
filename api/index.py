@@ -89,7 +89,7 @@ def main():
 
     try:
         resp = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-20b",
             messages=[
                 {"role":"system","content":"You are Bee, a Telegram bot with real-time web browsing. Always use the provided LIVE WEB DATA. Never say you can't fetch. If data is empty, still answer from knowledge but say search was limited."},
                 {"role":"user","content": prompt}
