@@ -1,3 +1,6 @@
 flask
 requests
 groq
+duckduckgo-search
+groq
+python-telegram-bot
