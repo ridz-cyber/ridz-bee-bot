@@ -127,7 +127,7 @@ def bee():
             system_content += f"\nWEB SEARCH RESULT for '{user_text}': {search_ctx}\nUse this to answer."
         
         comp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role":"system","content": system_content},
                 {"role":"user","content": user_text}
