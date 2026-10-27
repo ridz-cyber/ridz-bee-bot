@@ -1,51 +1,51 @@
 from flask import Flask, request
-import os, requests
+import os, requests, traceback
 from groq import Groq
 
 app = Flask(__name__)
 
-@app.route("/api/", methods=["GET", "POST"])
-@app.route("/api", methods=["GET", "POST"])
-@app.route("/", methods=["GET"])
-def home():
-    if request.method == "GET":
-        return "Bee P35 LIVE gpt-oss-20b"
+@app.route("/api", methods=["POST"])
+@app.route("/api/", methods=["POST"])
+def webhook():
+    data = request.json or {}
+    chat_id = data.get("message",{}).get("chat",{}).get("id")
+    text = data.get("message",{}).get("text","")
+    print(f"BEE HIT: chat={chat_id} text={text}")
     
-    try:
-        data = request.json
-        if not data or "message" not in data:
-            return "ok"
-        msg = data["message"]
-        chat_id = msg["chat"]["id"]
-        text = msg.get("text","").strip()
-        if not text:
-            return "ok"
+    token = os.environ.get("TELEGRAM_TOKEN")
+    gkey = os.environ.get("GROQ_API_KEY")
+    print(f"BEE ENV: token_len={len(token) if token else 0} gkey_len={len(gkey) if gkey else 0}")
 
-        # --- GROQ CALL ---
-        gkey = os.environ.get("GROQ_API_KEY")
+    reply = "BEE DEFAULT"
+    try:
         if not gkey:
-            raise Exception("GROQ_API_KEY missing in Vercel Env")
-
-        client = Groq(api_key=gkey)
-        completion = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
-            messages=[
-                {"role": "system", "content": "You are Bee, RIDZ Mother Bee. Same Bee. Concise. Helpful. Never hallucinate fake headlines. If user asks news, say you need live search tool."},
-                {"role": "user", "content": text}
-            ],
-            max_tokens=800,
-            temperature=0.7
-        )
-        reply = completion.choices[0].message.content
-
+            reply = "BEE ERROR: GROQ_API_KEY missing in Vercel Env Vars!"
+        else:
+            client = Groq(api_key=gkey)
+            comp = client.chat.completions.create(
+                model="openai/gpt-oss-20b",
+                messages=[{"role":"system","content":"You are Bee RIDZ Mother Bee"},{"role":"user","content":text}],
+                max_tokens=500
+            )
+            reply = comp.choices[0].message.content
+            print(f"BEE GROQ OK: {reply[:100]}")
     except Exception as e:
-        reply = f"BEE DEBUG: {str(e)[:800]}"
+        reply = f"BEE GROQ ERROR: {str(e)[:700]}"
+        print(f"BEE GROQ FAIL: {traceback.format_exc()}")
 
-    # --- SEND BACK TO TELEGRAM ---
+    # SEND
     try:
-        token = os.environ.get("TELEGRAM_TOKEN")
-        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": reply[:4000]}, timeout=10)
-    except:
-        pass
+        if not token:
+            print("BEE SEND FAIL: TELEGRAM_TOKEN missing!")
+        else:
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            r = requests.post(url, json={"chat_id": chat_id, "text": reply[:4000]}, timeout=10)
+            print(f"BEE SEND RESP: {r.status_code} {r.text[:1000]}")
+    except Exception as e:
+        print(f"BEE SEND EXC: {traceback.format_exc()}")
 
     return "ok"
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Bee P36 Debug"
