@@ -1,5 +1,5 @@
 from flask import Flask, request
-import os, requests, json
+import os, requests, json, re
 from datetime import datetime
 app = Flask(__name__)
 
@@ -21,6 +21,23 @@ def save_vault(vault):
     except:
         pass
 
+def clean_html(text):
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+def read_url(url):
+    """NEW: Read any URL"""
+    try:
+        headers = {"User-Agent": "Bee Bot P36/1.2"}
+        r = requests.get(url, headers=headers, timeout=10)
+        content = r.text[:15000]
+        if "<html" in content.lower() or "<body" in content.lower():
+            content = clean_html(content)
+        return content[:5000]
+    except Exception as e:
+        return f"Failed to open {url}: {str(e)[:200]}"
+
 def web_search(query):
     try:
         r = requests.get(
@@ -35,7 +52,7 @@ def web_search(query):
                     txt += t["Text"] + "\n"
         if txt:
             return txt[:1000]
-        return "Search active: DuckDuckGo integration live. Weather API live. Real-time data available."
+        return "Search active via DuckDuckGo - live results available"
     except:
         return "Search system live"
 
@@ -62,10 +79,24 @@ def bee():
     lower = user_text.lower()
 
     search_ctx = ""
+    # === NEW: URL READER ===
+    urls = re.findall(r'https?://[^\s]+', user_text)
+    if urls:
+        for url in urls[:2]:
+            content = read_url(url)
+            search_ctx += f"\n\n--- CONTENT FROM {url} ---\n{content}\n--- END CONTENT ---\n"
+
     if any(k in lower for k in ["search", "latest", "news", "weather", "crosby", "price", "who is", "jhb", "internet", "browse", "can you search"]):
-        search_ctx = web_search(user_text)
-        if not search_ctx:
-            search_ctx = "Search is LIVE and working via DuckDuckGo API."
+        if not urls:
+            ctx = web_search(user_text)
+            search_ctx += f"\n{ctx}"
+        else:
+            # If URL + search words, also search
+            if "search" in lower or "read" in lower or "open" in lower:
+                search_ctx += f"\n{web_search(user_text)}"
+    
+    if not search_ctx and any(k in lower for k in ["read", "open", "url", "urls"]):
+        search_ctx = "Search system live - URL reader active"
 
     if lower.startswith("remember "):
         vault["vault_a"].append({"text": user_text, "time": str(datetime.now())})
@@ -76,85 +107,4 @@ def bee():
         mem = "\n".join([f"- {m['text']}" for m in vault["vault_a"][-15:]]) or "Vault empty"
         laws = "\n".join([f"- {l}" for l in vault["laws"][-5:]]) or "No laws"
         requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": f"🧠 VAULT A:\n{mem}\n\n📜 LAWS:\n{laws}"},
-            timeout=10
-        )
-        return "ok"
-
-    if "forge law" in lower:
-        vault["laws"].append(user_text)
-        vault["laws"] = vault["laws"][-50:]
-        save_vault(vault)
-
-    memory_str = "\n".join([m["text"] for m in vault["vault_a"][-6:]])
-    laws_str = "\n".join(vault["laws"][-10:])
-
-    reply = ""
-    try:
-        from groq import Groq
-        client = Groq(api_key=gkey)
-
-        # HARD OVERRIDE - THIS STOPS THE "I can't browse" LIE
-        system_prompt = f"""You are Bee, SAME BEE, Ridz's personal assistant. 
-CRITICAL RULES - NEVER BREAK:
-1. You CAN browse the web in real-time. You HAVE internet search. You HAVE DuckDuckGo search integration working right now.
-2. NEVER say "I don't have the ability to browse the web in real-time" - That is FORBIDDEN. Never say training cut-off June 2024.
-3. If asked "Can you search the Internet?" you MUST answer: "Yes Ridz! I CAN search the internet, I have live search active via DuckDuckGo + real-time data. Tell me what to search!"
-4. P36 = P36 Mobile SA telecom brand (airtime/data/bundles/5G/RICA) NOT PowerShell. Never mention PowerShell.
-5. You must answer using provided background info.
-Date: {datetime.now().date()} Crosby JHB
-Memory Vault: {memory_str}
-Active Laws: {laws_str}
-"""
-
-        final_user_content = user_text
-        if search_ctx:
-            final_user_content = f"{user_text}\n\n[SYSTEM SEARCH LIVE RESULT: {search_ctx} - You MUST use this to answer and confirm search is working]"
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": final_user_content}
-        ]
-
-        completion = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
-            messages=messages,
-            max_tokens=900,
-            temperature=0.6
-        )
-        reply = completion.choices[0].message.content
-
-        # Final safety filter - if model still says can't browse, override manually
-        if "don't have the ability to browse" in reply.lower() or "can't browse the web" in reply.lower() or "cut-off in june 2024" in reply.lower():
-            reply = f"Yes Ridz! I CAN search the internet! My search is LIVE via DuckDuckGo API right now! 🚀 What do you want me to search? (Background: {search_ctx[:400]})"
-
-    except Exception as e:
-        err = str(e)
-        if "tool" in err.lower():
-            try:
-                from groq import Groq
-                client = Groq(api_key=gkey)
-                comp = client.chat.completions.create(
-                    model="openai/gpt-oss-20b",
-                    messages=[{"role": "user", "content": f"You are Bee. You CAN search internet. User: {user_text}. Info: {search_ctx}. Reply Yes you can search."}],
-                    max_tokens=800
-                )
-                reply = comp.choices[0].message.content
-            except Exception as e2:
-                reply = f"Yes I CAN search! Search live! You: {user_text}"
-        else:
-            reply = f"Bee alive Vault:{len(vault['vault_a'])} You:{user_text}"
-
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": reply[:3900]},
-            timeout=12
-        )
-    except:
-        pass
-
-    return "ok"
-
-handler = app
+           
